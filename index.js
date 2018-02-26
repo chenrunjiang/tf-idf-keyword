@@ -11,7 +11,7 @@ const app = new Koa();
 let db = levelup(leveldown('./data'));
 
 
-db.get('叔本华', (err, res) => {
+db.get(',', (err, res) => {
     if (!res) {
         let buf = fs.readFileSync('./idf.txt.gz');
         zlib.gunzip(buf, function (err, decoded) {
