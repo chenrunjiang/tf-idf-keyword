@@ -1,0 +1,18 @@
+{
+  "name": "tf-idf-keyword",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "koa": "^2.5.0",
+    "koa-body": "^2.5.0",
+    "leveldown": "^3.0.0",
+    "levelup": "^2.0.2",
+    "nodejieba": "^2.2.5"
+  }
+}
