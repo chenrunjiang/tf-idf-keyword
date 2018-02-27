@@ -12,19 +12,28 @@ let db = levelup(leveldown('./data'));
 
 
 db.get(',', (err, res) => {
-    if (!res) {
-        let buf = fs.readFileSync('./idf.txt.gz');
-        zlib.gunzip(buf, function (err, decoded) {
-            let data = decoded.toString().split('\n');
+    if (err) console.error(err);
+    console.log('start write..', res);
 
-            for (let d of data) {
-                let name = d.split(' ');
-                if (name[0].trim()) {
-                    db.put(name[0].trim(), name[1].trim());
-                }
+    if (!res) {
+        const r1 = readline.createInterface({
+            input: fs.createReadStream("./idf.txt")
+        });
+
+        let i = 0;
+        r1.on('line', (line) => {
+            let name = line.split(' ');
+            if (name[0].trim()) {
+                db.put(name[0].trim(), name[1].trim());
+            }
+
+            i++;
+            if (i%100000==0) {
+                console.log('add: ' + i);
             }
         });
     }
+
 });
 
 
