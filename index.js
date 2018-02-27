@@ -5,6 +5,7 @@ const leveldown = require('leveldown');
 const nodejieba = require("nodejieba");
 const zlib = require('zlib');
 const fs = require('fs');
+const readline = require('readline');
 
 const app = new Koa();
 
