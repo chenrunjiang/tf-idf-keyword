@@ -43,7 +43,7 @@ app.use(koaBody());
 const router = new Router();
 const step_words = require('./step_words');
 
-router.get('/keyword_random', async ctx => await keyword_random(ctx));
+router.post('/keyword_random', async ctx => await keyword_random(ctx));
 
 router.post('/tf-idf', async ctx => {
     let body = ctx.request.body||{};
@@ -98,7 +98,8 @@ router.post('/tf-idf_sort', async ctx => {
 const hosts = ['https://www.google.com', 'https://zh.wikipedia.org', 'https://upload.wikimedia.org'];
 
 router.get('/p/*', async (ctx,next) => {
-    let url = decodeURI(new Buffer(ctx.url.replace('/p/','').split(';;;')[0], 'base64').toString());
+    let urls = ctx.url.replace('/p/','').split(';;;');
+    let url = decodeURI(new Buffer(urls[0], 'base64').toString());
     let host;
 
     hosts.map((h)=> {
@@ -113,7 +114,7 @@ router.get('/p/*', async (ctx,next) => {
     delete header['host'];
     delete header['referer'];
 
-    let res = await fetch(url, {
+    let res = await fetch(url + (urls[1]||''), {
         includes: true,
         headers: header,
     });
