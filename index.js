@@ -3,9 +3,10 @@ const koaBody = require('koa-body');
 const levelup = require('levelup');
 const leveldown = require('leveldown');
 const nodejieba = require("nodejieba");
-const zlib = require('zlib');
 const fs = require('fs');
 const readline = require('readline');
+const fetch = require('node-fetch');
+const Router = require('koa-router');
 
 const app = new Koa();
 
@@ -29,7 +30,7 @@ db.get(',', (err, res) => {
             }
 
             i++;
-            if (i%100000==0) {
+            if (i%100000===0) {
                 console.log('add: ' + i);
             }
         });
@@ -40,73 +41,110 @@ db.get(',', (err, res) => {
 
 app.use(koaBody());
 
+
+const router = new Router();
 const step_words = require('./step_words');
 
-app.use(async ctx => {
-    switch (ctx.path) {
-        case '/keyword_random':
-            await keyword_random(ctx);
-            break;
+router.get('/keyword_random', async ctx => await keyword_random(ctx));
 
-        case '/tf-idf':
-            await (async() => {
-                let body = ctx.request.body||{};
-                let limit = ctx.query.limit?parseInt(ctx.query.limit):10;
-                let raw = nodejieba.cut(body.content);
+router.post('/tf-idf', async ctx => {
+    let body = ctx.request.body||{};
+    let limit = ctx.query.limit?parseInt(ctx.query.limit):10;
+    let raw = nodejieba.cut(body.content);
 
-                let words = await tf_idf(raw,limit);
+    let words = await tf_idf(raw,limit);
 
-                // update
-                await tf_idf_update(words, body.UniqueID);
+    // update
+    await tf_idf_update(words, body.UniqueID);
 
-                ctx.body = {code:0, words};
-            })();
-
-            break;
-
-        case '/tf-idf_sort':
-            await (async() => {
-                let body = ctx.request.body||{};
-                let keywords = null;
-                let db_key = 'keywords_' + body.UniqueID;
-
-                try {
-                    keywords = JSON.parse(await db.get(db_key));
-                } catch(e) {}
-
-                keywords = keywords || [];
-
-                for (let data of body.data) {
-                    let raw = nodejieba.cut(data.title + ' ' + data.content);
-                    data.tf_idf = [];
-
-                    for (let word of keywords) {
-                        for (let word1 of raw) {
-                            if (word.key === word1) {
-                                word.weight = (word.weight||0)+1;
-                            }
-                        }
-
-                        if (word.weight) {
-                            let tf = word.weight / raw.length;
-                            let idf = parseFloat((await db.get(word.key))||'0');
-                            data.tf_idf.push(tf * idf);
-                        }
-                    }
-
-                    data.tf_idf = eval(data.tf_idf.join('+'));
-                }
-
-                let data = body.data.sort( (a,b) => a.tf_idf < b.tf_idf ? 1: -1 );
-
-                ctx.body = {code:0, data};
-            })();
-            break;
-
-        default:
-            ctx.statusCode=404;
-    }
+    ctx.body = {code:0, words};
 });
+
+router.post('/tf-idf_sort', async ctx => {
+    let body = ctx.request.body||{};
+    let keywords = null;
+    let db_key = 'keywords_' + body.UniqueID;
+
+    try {
+        keywords = JSON.parse(await db.get(db_key));
+    } catch(e) {}
+
+    keywords = keywords || [];
+
+    for (let data of body.data) {
+        let raw = nodejieba.cut(data.title + ' ' + data.content);
+        data.tf_idf = [];
+
+        for (let word of keywords) {
+            for (let word1 of raw) {
+                if (word.key === word1) {
+                    word.weight = (word.weight||0)+1;
+                }
+            }
+
+            if (word.weight) {
+                let tf = word.weight / raw.length;
+                let idf = parseFloat((await db.get(word.key))||'0');
+                data.tf_idf.push(tf * idf);
+            }
+        }
+
+        data.tf_idf = eval(data.tf_idf.join('+'));
+    }
+
+    let data = body.data.sort( (a,b) => a.tf_idf < b.tf_idf ? 1: -1 );
+
+    ctx.body = {code:0, data};
+});
+
+const hosts = ['https://www.google.com', 'https://zh.wikipedia.org'];
+
+router.get('/p/*', async (ctx,next) => {
+    let url = ctx.url.replace('/p/','');
+    let host;
+
+    hosts.map((h)=> {
+        if (url.startsWith(h))  host = h;
+    });
+
+    if (!url || !host) {
+        return await next();
+    }
+
+    let header = ctx.req.headers;
+    delete header['host'];
+    delete header['referer'];
+
+    let res = await fetch(url, {
+        includes: true,
+        headers: header,
+    });
+
+
+    for(let key of res.headers.keys()) {
+        ctx.headers[key] = res.headers.get(key);
+    }
+
+    ctx.type = ctx.headers['content-type'];
+
+    if (ctx.type.startsWith('text')) {
+        ctx.body = await res.text();
+        ctx.body = ctx.body.replace(/"\//g, '"/p/'+host+'/')
+            .replace(/'\//g, `/p/${host}`);
+
+    } else {
+        ctx.body = res.body;
+    }
+
+    ctx.status = res.status;
+});
+
+
+app.use(router.routes())
+    .use(router.allowedMethods());
+
+app.use(ctx => ctx.redirect('https://cn.bing.com/'));
+
 
 async function keyword_random(ctx) {
     let body = ctx.request.body||{};
@@ -202,4 +240,4 @@ async function tf_idf_update(words, UniqueID) {
     await db.put(db_key, JSON.stringify (keywords));
 }
 
-app.listen(3000);
+app.listen(80);
