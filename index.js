@@ -95,11 +95,11 @@ router.post('/tf-idf_sort', async ctx => {
     ctx.body = {code:0, data};
 });
 
-const hosts = ['https://www.google.com', 'https://zh.wikipedia.org', 'https://upload.wikimedia.org'];
+const hosts = ['https://www.google.com', 'https://zh.wikipedia.org', 'https://zh.m.wikipedia.org', 'https://upload.wikimedia.org'];
 
 router.get('/p/*', async (ctx,next) => {
     let urls = ctx.url.replace('/p/','').split(';;;');
-    let url = decodeURI(new Buffer(urls[0], 'base64').toString());
+    let url = decodeURIComponent(new Buffer(urls[0], 'base64').toString());
     let host;
 
     hosts.map((h)=> {
@@ -115,10 +115,10 @@ router.get('/p/*', async (ctx,next) => {
     delete header['referer'];
 
     let res = await fetch(url + (urls[1]||''), {
+        method: 'GET',
         includes: true,
         headers: header,
     });
-
 
     for(let key of res.headers.keys()) {
         if (['Content-Length','content-encoding'].includes(key)) continue;
