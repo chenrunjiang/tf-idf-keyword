@@ -38,9 +38,7 @@ db.get(',', (err, res) => {
 
 });
 
-
 app.use(koaBody());
-
 
 const router = new Router();
 const step_words = require('./step_words');
@@ -97,10 +95,10 @@ router.post('/tf-idf_sort', async ctx => {
     ctx.body = {code:0, data};
 });
 
-const hosts = ['https://www.google.com', 'https://zh.wikipedia.org'];
+const hosts = ['https://www.google.com', 'https://zh.wikipedia.org', 'https://upload.wikimedia.org'];
 
 router.get('/p/*', async (ctx,next) => {
-    let url = ctx.url.replace('/p/','');
+    let url = decodeURI(new Buffer(ctx.url.replace('/p/','').split(';;;')[0], 'base64').toString());
     let host;
 
     hosts.map((h)=> {
@@ -122,15 +120,44 @@ router.get('/p/*', async (ctx,next) => {
 
 
     for(let key of res.headers.keys()) {
-        ctx.headers[key] = res.headers.get(key);
+        if (['Content-Length','content-encoding'].includes(key)) continue;
+        ctx.set(key, res.headers.get(key));
     }
 
-    ctx.type = ctx.headers['content-type'];
 
-    if (ctx.type.startsWith('text')) {
-        ctx.body = await res.text();
-        ctx.body = ctx.body.replace(/"\//g, '"/p/'+host+'/')
-            .replace(/'\//g, `/p/${host}`);
+    if (res.headers.get("content-type").startsWith('text')) {
+        let body = await res.text();
+
+        [`'`, `"`].map(s => {
+            let regexp = new RegExp(`${s}(?!/p/)\/[ \\w\\/\\.:\&\?\%;\=\%-,\s-]+${s}`);
+
+            while (body.match(regexp)) {
+                let m = body.match(regexp);
+
+                let m1 = m[0].substr(1, m[0].length-2).replace(/&amp;/g,'&');
+
+                let m_url;
+
+                if (m1.includes(', ')) {
+                    m1 = m1.split(', ');
+
+                    m_url = m1.map(z => {
+                        let z1 = z.split(' ');
+                        return new Buffer(encodeURI(z1[0].startsWith('//')?`https:${z1[0]}`:`${host}/${z1[0]}`)).toString('base64')
+                            + (' '+z1[1]||'');
+                    }).join(', ');
+
+                } else {
+                    m1 = m1.startsWith('//')?`https:${m1}`:`${host}${m1}`;
+                    m_url = new Buffer(encodeURI(m1)).toString('base64');
+                }
+
+                body = body.replace(m[0], `${s}/p/` + m_url + `;;;${s}`);
+            }
+
+        });
+
+        ctx.body = body;
 
     } else {
         ctx.body = res.body;
